@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:easy_stepper/easy_stepper.dart';
-import 'package:file_picker/file_picker.dart';
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import '../bloc/google_maps_integration_bloc.dart';
 import '../bloc/google_maps_integration_event.dart';
@@ -22,7 +22,6 @@ class GoogleMapsIntegrationScreen extends StatelessWidget {
             children: [
               EasyStepper(
                 activeStep: _getActiveStep(state),
-
                 stepShape: StepShape.rRectangle,
                 stepBorderRadius: 15,
                 internalPadding: 0,
@@ -152,55 +151,71 @@ class GoogleMapsIntegrationScreen extends StatelessWidget {
     final directoryController = TextEditingController(text: state.projectDirectory);
 
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Text(
-            'Select your Flutter project directory',
-            style: TextStyle(fontSize: 18),
-          ),
-          const SizedBox(height: 16),
-          if (kIsWeb) ...[
-            TextField(
-              controller: directoryController,
-              decoration: const InputDecoration(
-                hintText: 'Enter project directory path',
-                border: OutlineInputBorder(),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Text(
+              'Select your Flutter project directory',
+              style: TextStyle(fontSize: 18),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Choose your Flutter project directory',
+              style: TextStyle(fontSize: 14, color: Colors.grey),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            Container(
+              constraints: const BoxConstraints(maxWidth: 500),
+              child: Column(
+                children: [
+                  TextField(
+                    controller: directoryController,
+                    readOnly: true,
+                    decoration: const InputDecoration(
+                      hintText: 'Selected directory path will appear here',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.folder),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  ElevatedButton.icon(
+                    onPressed: () async {
+                      try {
+                        final String? directoryPath = await getDirectoryPath(
+                          confirmButtonText: 'Select Directory',
+                          initialDirectory: state.projectDirectory,
+                        );
+                        if (directoryPath != null) {
+                          context.read<GoogleMapsIntegrationBloc>().add(
+                                SelectProjectDirectory(directoryPath),
+                              );
+                        }
+                      } catch (e) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Error selecting directory: $e'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      }
+                    },
+                    icon: const Icon(Icons.folder_open),
+                    label: const Text('Choose Directory'),
+                  ),
+                ],
               ),
-              onSubmitted: (value) {
-                if (value.isNotEmpty) {
-                  context.read<GoogleMapsIntegrationBloc>().add(
-                        SelectProjectDirectory(value),
-                      );
-                }
-              },
             ),
-            const SizedBox(height: 16),
-            ElevatedButton.icon(
-              onPressed: () {
-                if (directoryController.text.isNotEmpty) {
-                  context.read<GoogleMapsIntegrationBloc>().add(
-                        SelectProjectDirectory(directoryController.text),
-                      );
-                }
-              },
-              icon: const Icon(Icons.check),
-              label: const Text('Confirm Directory'),
+            const SizedBox(height: 24),
+            const Text(
+              'Note: Make sure the directory contains a valid Flutter project with pubspec.yaml',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+              textAlign: TextAlign.center,
             ),
-          ] else
-            ElevatedButton.icon(
-              onPressed: () async {
-                final result = await FilePicker.platform.getDirectoryPath();
-                if (result != null) {
-                  context.read<GoogleMapsIntegrationBloc>().add(
-                        SelectProjectDirectory(result),
-                      );
-                }
-              },
-              icon: const Icon(Icons.folder_open),
-              label: const Text('Choose Directory'),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -247,19 +262,23 @@ class GoogleMapsIntegrationScreen extends StatelessWidget {
             style: TextStyle(fontSize: 18),
           ),
           const SizedBox(height: 16),
-          TextField(
-            controller: apiKeyController,
-            decoration: const InputDecoration(
-              hintText: 'Enter your API key',
-              border: OutlineInputBorder(),
+          Container(
+            constraints: const BoxConstraints(maxWidth: 500),
+            child: TextField(
+              controller: apiKeyController,
+              decoration: const InputDecoration(
+                hintText: 'Enter your API key',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.key),
+              ),
+              onSubmitted: (value) {
+                if (value.isNotEmpty) {
+                  context.read<GoogleMapsIntegrationBloc>().add(
+                        SetApiKey(value),
+                      );
+                }
+              },
             ),
-            onSubmitted: (value) {
-              if (value.isNotEmpty) {
-                context.read<GoogleMapsIntegrationBloc>().add(
-                      SetApiKey(value),
-                    );
-              }
-            },
           ),
           const SizedBox(height: 16),
           ElevatedButton.icon(

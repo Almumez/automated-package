@@ -45,11 +45,12 @@ dependencies:
   internet_connection_checker_plus: ^2.1.0
   easy_stepper: ^0.8.5+1
   google_maps_flutter: ^2.5.3
-  file_picker: ^6.1.1
+  file_selector: ^1.0.3
   path: ^1.8.3
   yaml: ^3.1.2
   flutter_web_plugins:
     sdk: flutter
+  html: ^0.15.4
 
 dev_dependencies:
   flutter_test:
