@@ -22,13 +22,13 @@ class _GoogleMapsIntegrationScreenState extends State<GoogleMapsIntegrationScree
   @override
   void initState() {
     super.initState();
-    // سنطلب الصلاحيات بعد تحميل الواجهة مباشرة
+    // Request permissions after UI loads
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _requestPermissionsWithDialog();
     });
   }
 
-  // طلب الصلاحيات مع إظهار حوار توضيحي
+  // Request permissions with an explanatory dialog
   void _requestPermissionsWithDialog() {
     if (_permissionsRequested || kIsWeb) return;
     
@@ -39,12 +39,10 @@ class _GoogleMapsIntegrationScreenState extends State<GoogleMapsIntegrationScree
         context: context,
         barrierDismissible: false,
         builder: (context) => AlertDialog(
-          title: const Text('طلب صلاحيات'),
+          title: const Text('Permission Request'),
           content: const Text(
-            'يحتاج التطبيق إلى صلاحيات الوصول للتخزين لقراءة وتعديل ملفات مشروع Flutter الخاص بك. '
-            'الرجاء منح الصلاحيات المطلوبة للمتابعة.',
-            textAlign: TextAlign.right,
-            textDirection: TextDirection.rtl,
+            'This app needs storage access permissions to read and modify your Flutter project files. '
+            'Please grant the required permissions to continue.',
           ),
           actions: [
             TextButton(
@@ -52,7 +50,7 @@ class _GoogleMapsIntegrationScreenState extends State<GoogleMapsIntegrationScree
                 Navigator.of(context).pop();
                 context.read<GoogleMapsIntegrationBloc>().add(RequestPermissions());
               },
-              child: const Text('موافق'),
+              child: const Text('OK'),
             ),
           ],
         ),
@@ -142,65 +140,11 @@ class _GoogleMapsIntegrationScreenState extends State<GoogleMapsIntegrationScree
                   child: _buildStepContent(context, state),
                 ),
               ),
-              _buildNavigationButtons(context, state),
             ],
           );
         },
       ),
     );
-  }
-
-  Widget _buildNavigationButtons(BuildContext context, GoogleMapsIntegrationState state) {
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          ElevatedButton.icon(
-            onPressed: currentStep > 0
-                ? () {
-                    setState(() {
-                      currentStep--;
-                    });
-                  }
-                : null,
-            icon: const Icon(Icons.arrow_back),
-            label: const Text('السابق'),
-          ),
-          ElevatedButton.icon(
-            onPressed: _canMoveToNextStep(state)
-                ? () {
-                    setState(() {
-                      currentStep++;
-                    });
-                  }
-                : null,
-            icon: const Icon(Icons.arrow_forward),
-            label: const Text('التالي'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: _canMoveToNextStep(state) ? Colors.blue : Colors.grey,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  bool _canMoveToNextStep(GoogleMapsIntegrationState state) {
-    switch (currentStep) {
-      case 0:
-        return state.projectDirectory != null;
-      case 1:
-        return state.isPackageAdded;
-      case 2:
-        return state.apiKey != null;
-      case 3:
-        return state.isPlatformConfigured;
-      case 4:
-        return state.isExampleAdded;
-      default:
-        return false;
-    }
   }
 
   int _getActiveStep(GoogleMapsIntegrationState state) {
@@ -279,7 +223,7 @@ class _GoogleMapsIntegrationScreenState extends State<GoogleMapsIntegrationScree
                   child: Column(
                     children: [
                       const Text(
-                        'صلاحيات التخزين',
+                        'Storage Permissions',
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
@@ -288,7 +232,7 @@ class _GoogleMapsIntegrationScreenState extends State<GoogleMapsIntegrationScree
                       ),
                       const SizedBox(height: 8),
                       const Text(
-                        'يحتاج التطبيق إلى صلاحيات الوصول للتخزين لقراءة وتعديل ملفات مشروعك',
+                        'This app needs storage access to read and modify your project files',
                         style: TextStyle(fontSize: 14),
                         textAlign: TextAlign.center,
                       ),
@@ -300,7 +244,7 @@ class _GoogleMapsIntegrationScreenState extends State<GoogleMapsIntegrationScree
                               );
                         },
                         icon: const Icon(Icons.security),
-                        label: const Text('طلب الصلاحيات'),
+                        label: const Text('Request Permissions'),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.blue,
                           foregroundColor: Colors.white,
@@ -355,7 +299,7 @@ class _GoogleMapsIntegrationScreenState extends State<GoogleMapsIntegrationScree
                                 );
                           },
                           icon: const Icon(Icons.perm_device_information),
-                          label: const Text('طلب الصلاحيات'),
+                          label: const Text('Request Permissions'),
                         ),
                       const SizedBox(width: 16),
                       ElevatedButton.icon(
@@ -397,7 +341,7 @@ class _GoogleMapsIntegrationScreenState extends State<GoogleMapsIntegrationScree
                           }
                         },
                         icon: const Icon(Icons.folder_open),
-                        label: const Text('اختيار المجلد'),
+                        label: const Text('Choose Directory'),
                       ),
                       if (directoryController.text.isNotEmpty) ...[
                         const SizedBox(width: 16),
@@ -410,7 +354,7 @@ class _GoogleMapsIntegrationScreenState extends State<GoogleMapsIntegrationScree
                             }
                           },
                           icon: const Icon(Icons.check),
-                          label: const Text('تأكيد'),
+                          label: const Text('Confirm'),
                         ),
                       ],
                       if (state.projectDirectory != null) ...[

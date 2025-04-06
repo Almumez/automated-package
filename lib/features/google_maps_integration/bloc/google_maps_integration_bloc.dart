@@ -45,15 +45,15 @@ class GoogleMapsIntegrationBloc
 
     // For Android 11+ (API level 30+), request for MANAGE_EXTERNAL_STORAGE
     if (Platform.isAndroid) {
-      // طلب صلاحية MANAGE_EXTERNAL_STORAGE لأندرويد 11+
+      // Request MANAGE_EXTERNAL_STORAGE permission for Android 11+
       bool hasManageStoragePerm = await _requestManageExternalStoragePermission();
       if (!hasManageStoragePerm) {
-        // محاولة أخرى في حالة الفشل
+        // Try again if failed
         await Future.delayed(const Duration(seconds: 1));
         hasManageStoragePerm = await _requestManageExternalStoragePermission();
       }
 
-      // طلب صلاحية التخزين العادية
+      // Request regular storage permission
       bool hasStoragePerm = false;
       final storageStatus = await Permission.storage.status;
       
@@ -64,7 +64,7 @@ class GoogleMapsIntegrationBloc
         hasStoragePerm = true;
       }
       
-      return hasStoragePerm || hasManageStoragePerm; // نكتفي بواحدة من الصلاحيات
+      return hasStoragePerm || hasManageStoragePerm; // Either permission is sufficient
     }
     
     return true;
@@ -79,7 +79,7 @@ class GoogleMapsIntegrationBloc
       final hasPermissions = await _checkAndRequestPermissions();
       if (!hasPermissions) {
         emit(state.copyWith(
-          error: 'لم يتم منح الصلاحيات اللازمة. الرجاء منح صلاحيات التخزين للوصول إلى ملفات المشروع',
+          error: 'Required permissions were not granted. Please grant storage permissions to access project files',
           isLoading: false,
         ));
         return;
@@ -91,7 +91,7 @@ class GoogleMapsIntegrationBloc
       ));
     } catch (e) {
       emit(state.copyWith(
-        error: 'حدث خطأ أثناء طلب الصلاحيات: ${e.toString()}',
+        error: 'Error requesting permissions: ${e.toString()}',
         isLoading: false,
       ));
     }
