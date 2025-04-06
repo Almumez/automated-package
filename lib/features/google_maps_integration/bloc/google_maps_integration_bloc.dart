@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'dart:async';
 import 'google_maps_integration_event.dart';
 import 'google_maps_integration_state.dart';
+import 'package:equatable/equatable.dart';
 
 class GoogleMapsIntegrationBloc
     extends Bloc<GoogleMapsIntegrationEvent, GoogleMapsIntegrationState> {
@@ -281,19 +282,39 @@ class GoogleMapsIntegrationBloc
       if (await androidManifestFile.exists()) {
         var manifestContent = await androidManifestFile.readAsString();
         if (!manifestContent.contains('android.permission.INTERNET')) {
-          manifestContent = manifestContent.replaceFirst(
-            '<manifest',
-            '<manifest xmlns:android="http://schemas.android.com/apk/res/android">\n    <uses-permission android:name="android.permission.INTERNET"/>',
-          );
+          // The replaceFirst method here might not work well if manifest already has attributes
+          // Let's check first if the manifest has xmlns:android declaration
+          if (!manifestContent.contains('xmlns:android=')) {
+            manifestContent = manifestContent.replaceFirst(
+              '<manifest',
+              '<manifest xmlns:android="http://schemas.android.com/apk/res/android"',
+            );
+          }
+          
+          // Now add the internet permission if it doesn't exist
+          if (!manifestContent.contains('<uses-permission android:name="android.permission.INTERNET"')) {
+            final insertPoint = manifestContent.indexOf('<application');
+            if (insertPoint > 0) {
+              manifestContent = manifestContent.substring(0, insertPoint) +
+                  '    <uses-permission android:name="android.permission.INTERNET" />\n' +
+                  manifestContent.substring(insertPoint);
+            }
+          }
+          
           await androidManifestFile.writeAsString(manifestContent);
         }
 
-        if (!manifestContent.contains('android:value="YOUR-API-KEY"')) {
-          manifestContent = manifestContent.replaceFirst(
-            '</application>',
-            '        <meta-data\n            android:name="com.google.android.geo.API_KEY"\n            android:value="${state.apiKey}"/>\n    </application>',
-          );
-          await androidManifestFile.writeAsString(manifestContent);
+        // Check if meta-data already exists
+        if (!manifestContent.contains('com.google.android.geo.API_KEY')) {
+          final appEnd = manifestContent.lastIndexOf('</application>');
+          if (appEnd > 0) {
+            manifestContent = manifestContent.substring(0, appEnd) +
+                '        <meta-data\n' +
+                '            android:name="com.google.android.geo.API_KEY"\n' +
+                '            android:value="${state.apiKey}" />\n' +
+                '    ' + manifestContent.substring(appEnd);
+            await androidManifestFile.writeAsString(manifestContent);
+          }
         }
       }
 
@@ -308,15 +329,61 @@ class GoogleMapsIntegrationBloc
       if (await iosAppDelegateFile.exists()) {
         var appDelegateContent = await iosAppDelegateFile.readAsString();
         if (!appDelegateContent.contains('GMSServices.provideAPIKey')) {
-          appDelegateContent = appDelegateContent.replaceFirst(
-            'import UIKit',
-            'import UIKit\nimport GoogleMaps',
-          );
-          appDelegateContent = appDelegateContent.replaceFirst(
-            'func application',
-            '    GMSServices.provideAPIKey("${state.apiKey}")\n\n    func application',
-          );
+          // Add the import if it doesn't exist
+          if (!appDelegateContent.contains('import GoogleMaps')) {
+            appDelegateContent = appDelegateContent.replaceFirst(
+              'import UIKit',
+              'import UIKit\nimport GoogleMaps',
+            );
+          }
+          
+          // Add the API key initialization
+          // Find didFinishLaunchingWithOptions
+          final didFinishLaunchingMethod = appDelegateContent.indexOf('didFinishLaunchingWithOptions');
+          if (didFinishLaunchingMethod >= 0) {
+            // Find the first occurrence of GeneratedPluginRegistrant.register
+            final registerPluginsLine = appDelegateContent.indexOf('GeneratedPluginRegistrant.register', didFinishLaunchingMethod);
+            if (registerPluginsLine >= 0) {
+              // Insert before register plugins
+              appDelegateContent = appDelegateContent.substring(0, registerPluginsLine) +
+                  '    GMSServices.provideAPIKey("${state.apiKey}")\n    ' +
+                  appDelegateContent.substring(registerPluginsLine);
+            }
+          }
           await iosAppDelegateFile.writeAsString(appDelegateContent);
+        }
+      }
+      
+      // Configure iOS Info.plist to add location permissions
+      final iosInfoPlistFile = File(path.join(
+        state.projectDirectory!,
+        'ios',
+        'Runner',
+        'Info.plist',
+      ));
+      
+      if (await iosInfoPlistFile.exists()) {
+        var infoPlistContent = await iosInfoPlistFile.readAsString();
+        bool modified = false;
+        
+        // Add location usage descriptions if they don't exist
+        if (!infoPlistContent.contains('NSLocationWhenInUseUsageDescription')) {
+          final insertPoint = infoPlistContent.lastIndexOf('</dict>');
+          if (insertPoint > 0) {
+            infoPlistContent = infoPlistContent.substring(0, insertPoint) +
+                '\t<key>NSLocationWhenInUseUsageDescription</key>\n' +
+                '\t<string>This app needs access to location when open to show your position on the map.</string>\n' +
+                '\t<key>NSLocationAlwaysUsageDescription</key>\n' +
+                '\t<string>This app needs access to location when in the background.</string>\n' +
+                '\t<key>io.flutter.embedded_views_preview</key>\n' +
+                '\t<true/>\n' +
+                infoPlistContent.substring(insertPoint);
+            modified = true;
+          }
+        }
+        
+        if (modified) {
+          await iosInfoPlistFile.writeAsString(infoPlistContent);
         }
       }
 
@@ -351,6 +418,8 @@ class GoogleMapsIntegrationBloc
       final exampleContent = '''
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:equatable/equatable.dart';
 
 void main() {
   runApp(const MyApp());
@@ -366,27 +435,115 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         primarySwatch: Colors.blue,
       ),
-      home: const MapScreen(),
+      home: BlocProvider(
+        create: (context) => MapBloc(),
+        child: const MapScreen(),
+      ),
     );
   }
 }
 
-class MapScreen extends StatefulWidget {
-  const MapScreen({super.key});
-
+// Map Events
+abstract class MapEvent extends Equatable {
+  const MapEvent();
+  
   @override
-  State<MapScreen> createState() => _MapScreenState();
+  List<Object> get props => [];
 }
 
-class _MapScreenState extends State<MapScreen> {
-  GoogleMapController? mapController;
-  final Set<Marker> _markers = {};
+class MapCreated extends MapEvent {
+  final GoogleMapController controller;
+  
+  const MapCreated(this.controller);
+  
+  @override
+  List<Object> get props => [controller];
+}
 
-  final LatLng _center = const LatLng(0, 0);
+class MarkerAdded extends MapEvent {
+  final LatLng position;
+  
+  const MarkerAdded(this.position);
+  
+  @override
+  List<Object> get props => [position];
+}
 
-  void _onMapCreated(GoogleMapController controller) {
-    mapController = controller;
+// Map States
+class MapState extends Equatable {
+  final GoogleMapController? controller;
+  final Set<Marker> markers;
+  final CameraPosition cameraPosition;
+  
+  const MapState({
+    this.controller,
+    this.markers = const {},
+    this.cameraPosition = const CameraPosition(
+      target: LatLng(0, 0),
+      zoom: 11.0,
+    ),
+  });
+  
+  MapState copyWith({
+    GoogleMapController? controller,
+    Set<Marker>? markers,
+    CameraPosition? cameraPosition,
+  }) {
+    return MapState(
+      controller: controller ?? this.controller,
+      markers: markers ?? this.markers,
+      cameraPosition: cameraPosition ?? this.cameraPosition,
+    );
   }
+  
+  @override
+  List<Object?> get props => [markers, cameraPosition];
+}
+
+// Map Bloc
+class MapBloc extends Bloc<MapEvent, MapState> {
+  MapBloc() : super(const MapState()) {
+    on<MapCreated>(_onMapCreated);
+    on<MarkerAdded>(_onMarkerAdded);
+  }
+  
+  void _onMapCreated(MapCreated event, Emitter<MapState> emit) {
+    emit(state.copyWith(controller: event.controller));
+  }
+  
+  void _onMarkerAdded(MarkerAdded event, Emitter<MapState> emit) {
+    final newMarker = Marker(
+      markerId: MarkerId('marker_\${state.markers.length}'),
+      position: event.position,
+      infoWindow: InfoWindow(
+        title: 'Marker \${state.markers.length + 1}',
+        snippet: '\${event.position.latitude}, \${event.position.longitude}',
+      ),
+    );
+    
+    final newMarkers = Set<Marker>.from(state.markers)..add(newMarker);
+    
+    emit(state.copyWith(
+      markers: newMarkers,
+      cameraPosition: CameraPosition(
+        target: event.position,
+        zoom: 14.0,
+      ),
+    ));
+    
+    state.controller?.animateCamera(
+      CameraUpdate.newCameraPosition(
+        CameraPosition(
+          target: event.position,
+          zoom: 14.0,
+        ),
+      ),
+    );
+  }
+}
+
+class MapScreen extends StatelessWidget {
+  const MapScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -394,13 +551,37 @@ class _MapScreenState extends State<MapScreen> {
       appBar: AppBar(
         title: const Text('Google Maps Example'),
       ),
-      body: GoogleMap(
-        onMapCreated: _onMapCreated,
-        initialCameraPosition: CameraPosition(
-          target: _center,
-          zoom: 11.0,
-        ),
-        markers: _markers,
+      body: BlocBuilder<MapBloc, MapState>(
+        builder: (context, state) {
+          return GoogleMap(
+            onMapCreated: (controller) {
+              context.read<MapBloc>().add(MapCreated(controller));
+            },
+            initialCameraPosition: state.cameraPosition,
+            markers: state.markers,
+            onTap: (position) {
+              context.read<MapBloc>().add(MarkerAdded(position));
+            },
+          );
+        },
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          // Default to a location in the middle of the world if no markers exist
+          final target = BlocProvider.of<MapBloc>(context).state.markers.isEmpty
+              ? const LatLng(0, 0)
+              : BlocProvider.of<MapBloc>(context).state.markers.first.position;
+              
+          BlocProvider.of<MapBloc>(context).state.controller?.animateCamera(
+            CameraUpdate.newCameraPosition(
+              CameraPosition(
+                target: target,
+                zoom: 10.0,
+              ),
+            ),
+          );
+        },
+        child: const Icon(Icons.center_focus_strong),
       ),
     );
   }
