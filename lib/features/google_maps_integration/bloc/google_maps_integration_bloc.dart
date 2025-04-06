@@ -2,6 +2,10 @@ import 'dart:io';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:path/path.dart' as path;
 import 'package:yaml/yaml.dart';
+import 'package:flutter/foundation.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:flutter/services.dart';
+import 'dart:async';
 import 'google_maps_integration_event.dart';
 import 'google_maps_integration_state.dart';
 
@@ -13,6 +17,84 @@ class GoogleMapsIntegrationBloc
     on<SetApiKey>(_onSetApiKey);
     on<ConfigurePlatforms>(_onConfigurePlatforms);
     on<AddMapExample>(_onAddMapExample);
+    on<RequestPermissions>(_onRequestPermissions);
+  }
+
+  // التحقق من صلاحيات التخزين الكاملة في أندرويد 11+
+  Future<bool> _requestManageExternalStoragePermission() async {
+    try {
+      // Check if permission is already granted
+      final status = await Permission.manageExternalStorage.status;
+      if (status == PermissionStatus.granted) {
+        return true;
+      }
+
+      // Request permission
+      final result = await Permission.manageExternalStorage.request();
+      return result == PermissionStatus.granted;
+    } catch (e) {
+      print('Error requesting MANAGE_EXTERNAL_STORAGE: $e');
+      return false;
+    }
+  }
+
+  Future<bool> _checkAndRequestPermissions() async {
+    if (kIsWeb) {
+      return true; // Web doesn't need file permissions
+    }
+
+    // For Android 11+ (API level 30+), request for MANAGE_EXTERNAL_STORAGE
+    if (Platform.isAndroid) {
+      // طلب صلاحية MANAGE_EXTERNAL_STORAGE لأندرويد 11+
+      bool hasManageStoragePerm = await _requestManageExternalStoragePermission();
+      if (!hasManageStoragePerm) {
+        // محاولة أخرى في حالة الفشل
+        await Future.delayed(const Duration(seconds: 1));
+        hasManageStoragePerm = await _requestManageExternalStoragePermission();
+      }
+
+      // طلب صلاحية التخزين العادية
+      bool hasStoragePerm = false;
+      final storageStatus = await Permission.storage.status;
+      
+      if (storageStatus != PermissionStatus.granted) {
+        final status = await Permission.storage.request();
+        hasStoragePerm = status == PermissionStatus.granted;
+      } else {
+        hasStoragePerm = true;
+      }
+      
+      return hasStoragePerm || hasManageStoragePerm; // نكتفي بواحدة من الصلاحيات
+    }
+    
+    return true;
+  }
+
+  Future<void> _onRequestPermissions(
+    RequestPermissions event,
+    Emitter<GoogleMapsIntegrationState> emit,
+  ) async {
+    emit(state.copyWith(isLoading: true));
+    try {
+      final hasPermissions = await _checkAndRequestPermissions();
+      if (!hasPermissions) {
+        emit(state.copyWith(
+          error: 'لم يتم منح الصلاحيات اللازمة. الرجاء منح صلاحيات التخزين للوصول إلى ملفات المشروع',
+          isLoading: false,
+        ));
+        return;
+      }
+      
+      emit(state.copyWith(
+        isLoading: false,
+        error: null,
+      ));
+    } catch (e) {
+      emit(state.copyWith(
+        error: 'حدث خطأ أثناء طلب الصلاحيات: ${e.toString()}',
+        isLoading: false,
+      ));
+    }
   }
 
   Future<void> _onSelectProjectDirectory(
@@ -21,6 +103,18 @@ class GoogleMapsIntegrationBloc
   ) async {
     emit(state.copyWith(isLoading: true, error: null));
     try {
+      // Request permissions first
+      if (!kIsWeb && Platform.isAndroid) {
+        final hasPermissions = await _checkAndRequestPermissions();
+        if (!hasPermissions) {
+          emit(state.copyWith(
+            error: 'Storage permissions are required to access the project files',
+            isLoading: false,
+          ));
+          return;
+        }
+      }
+      
       final directory = Directory(event.directoryPath);
       if (!await directory.exists()) {
         throw Exception('Directory does not exist');
@@ -54,18 +148,47 @@ class GoogleMapsIntegrationBloc
 
     emit(state.copyWith(isLoading: true, error: null));
     try {
-      final pubspecFile = File(path.join(state.projectDirectory!, 'pubspec.yaml'));
-      final pubspecContent = await pubspecFile.readAsString();
-      final pubspec = loadYaml(pubspecContent);
-
-      if (pubspec['dependencies'] == null) {
-        throw Exception('Invalid pubspec.yaml format');
+      // Request permissions first
+      if (!kIsWeb && Platform.isAndroid) {
+        final hasPermissions = await _checkAndRequestPermissions();
+        if (!hasPermissions) {
+          emit(state.copyWith(
+            error: 'Storage permissions are required to modify the project files',
+            isLoading: false,
+          ));
+          return;
+        }
       }
-
-      final dependencies = pubspec['dependencies'] as YamlMap;
-      if (!dependencies.containsKey('google_maps_flutter')) {
-        dependencies['google_maps_flutter'] = '^2.5.3';
-        await pubspecFile.writeAsString(pubspec.toString());
+      
+      final pubspecFile = File(path.join(state.projectDirectory!, 'pubspec.yaml'));
+      if (!await pubspecFile.exists()) {
+        throw Exception('pubspec.yaml file not found.');
+      }
+      
+      String pubspecContent;
+      try {
+        pubspecContent = await pubspecFile.readAsString();
+      } catch (e) {
+        throw Exception('Error reading pubspec.yaml: $e');
+      }
+      
+      // Simple string manipulation instead of YAML parsing
+      if (!pubspecContent.contains('google_maps_flutter:')) {
+        // Find dependencies section
+        if (pubspecContent.contains('dependencies:')) {
+          // Add the package under dependencies
+          const packageLine = '  google_maps_flutter: ^2.5.3\n';
+          final dependenciesIndex = pubspecContent.indexOf('dependencies:');
+          final insertIndex = pubspecContent.indexOf('\n', dependenciesIndex) + 1;
+          
+          final newContent = pubspecContent.substring(0, insertIndex) + 
+                            packageLine + 
+                            pubspecContent.substring(insertIndex);
+                            
+          await pubspecFile.writeAsString(newContent);
+        } else {
+          throw Exception('Cannot find dependencies section in pubspec.yaml');
+        }
       }
 
       emit(state.copyWith(

@@ -3,12 +3,62 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:easy_stepper/easy_stepper.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'dart:io' show Platform;
 import '../bloc/google_maps_integration_bloc.dart';
 import '../bloc/google_maps_integration_event.dart';
 import '../bloc/google_maps_integration_state.dart';
 
-class GoogleMapsIntegrationScreen extends StatelessWidget {
+class GoogleMapsIntegrationScreen extends StatefulWidget {
   const GoogleMapsIntegrationScreen({super.key});
+
+  @override
+  State<GoogleMapsIntegrationScreen> createState() => _GoogleMapsIntegrationScreenState();
+}
+
+class _GoogleMapsIntegrationScreenState extends State<GoogleMapsIntegrationScreen> {
+  int currentStep = 0;
+  bool _permissionsRequested = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // سنطلب الصلاحيات بعد تحميل الواجهة مباشرة
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _requestPermissionsWithDialog();
+    });
+  }
+
+  // طلب الصلاحيات مع إظهار حوار توضيحي
+  void _requestPermissionsWithDialog() {
+    if (_permissionsRequested || kIsWeb) return;
+    
+    _permissionsRequested = true;
+    
+    if (!kIsWeb && Platform.isAndroid) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          title: const Text('طلب صلاحيات'),
+          content: const Text(
+            'يحتاج التطبيق إلى صلاحيات الوصول للتخزين لقراءة وتعديل ملفات مشروع Flutter الخاص بك. '
+            'الرجاء منح الصلاحيات المطلوبة للمتابعة.',
+            textAlign: TextAlign.right,
+            textDirection: TextDirection.rtl,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                context.read<GoogleMapsIntegrationBloc>().add(RequestPermissions());
+              },
+              child: const Text('موافق'),
+            ),
+          ],
+        ),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -18,14 +68,22 @@ class GoogleMapsIntegrationScreen extends StatelessWidget {
       ),
       body: BlocBuilder<GoogleMapsIntegrationBloc, GoogleMapsIntegrationState>(
         builder: (context, state) {
+          // Update the current step based on state
+          currentStep = _getActiveStep(state);
+          
           return Column(
             children: [
               EasyStepper(
-                activeStep: _getActiveStep(state),
+                activeStep: currentStep,
                 stepShape: StepShape.rRectangle,
                 stepBorderRadius: 15,
                 internalPadding: 0,
                 showLoadingAnimation: false,
+                onStepReached: (index) {
+                  setState(() {
+                    currentStep = index;
+                  });
+                },
                 steps: [
                   EasyStep(
                     customStep: CircleAvatar(
@@ -44,6 +102,7 @@ class GoogleMapsIntegrationScreen extends StatelessWidget {
                       child: const Icon(Icons.add_box, color: Colors.white),
                     ),
                     title: 'Add Package',
+                    enabled: state.projectDirectory != null,
                   ),
                   EasyStep(
                     customStep: CircleAvatar(
@@ -53,6 +112,7 @@ class GoogleMapsIntegrationScreen extends StatelessWidget {
                       child: const Icon(Icons.key, color: Colors.white),
                     ),
                     title: 'API Key',
+                    enabled: state.isPackageAdded,
                   ),
                   EasyStep(
                     customStep: CircleAvatar(
@@ -62,6 +122,7 @@ class GoogleMapsIntegrationScreen extends StatelessWidget {
                       child: const Icon(Icons.settings, color: Colors.white),
                     ),
                     title: 'Configure',
+                    enabled: state.apiKey != null,
                   ),
                   EasyStep(
                     customStep: CircleAvatar(
@@ -71,6 +132,7 @@ class GoogleMapsIntegrationScreen extends StatelessWidget {
                       child: const Icon(Icons.map, color: Colors.white),
                     ),
                     title: 'Add Example',
+                    enabled: state.isPlatformConfigured,
                   ),
                 ],
               ),
@@ -80,6 +142,7 @@ class GoogleMapsIntegrationScreen extends StatelessWidget {
                   child: _buildStepContent(context, state),
                 ),
               ),
+              _buildNavigationButtons(context, state),
             ],
           );
         },
@@ -87,13 +150,66 @@ class GoogleMapsIntegrationScreen extends StatelessWidget {
     );
   }
 
+  Widget _buildNavigationButtons(BuildContext context, GoogleMapsIntegrationState state) {
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          ElevatedButton.icon(
+            onPressed: currentStep > 0
+                ? () {
+                    setState(() {
+                      currentStep--;
+                    });
+                  }
+                : null,
+            icon: const Icon(Icons.arrow_back),
+            label: const Text('السابق'),
+          ),
+          ElevatedButton.icon(
+            onPressed: _canMoveToNextStep(state)
+                ? () {
+                    setState(() {
+                      currentStep++;
+                    });
+                  }
+                : null,
+            icon: const Icon(Icons.arrow_forward),
+            label: const Text('التالي'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _canMoveToNextStep(state) ? Colors.blue : Colors.grey,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  bool _canMoveToNextStep(GoogleMapsIntegrationState state) {
+    switch (currentStep) {
+      case 0:
+        return state.projectDirectory != null;
+      case 1:
+        return state.isPackageAdded;
+      case 2:
+        return state.apiKey != null;
+      case 3:
+        return state.isPlatformConfigured;
+      case 4:
+        return state.isExampleAdded;
+      default:
+        return false;
+    }
+  }
+
   int _getActiveStep(GoogleMapsIntegrationState state) {
     if (state.projectDirectory == null) return 0;
-    if (state.isPackageAdded) return 1;
-    if (state.apiKey != null) return 2;
-    if (state.isPlatformConfigured) return 3;
-    if (state.isExampleAdded) return 4;
-    return 0;
+    if (!state.isPackageAdded) return 1;
+    if (state.apiKey == null) return 2;
+    if (!state.isPlatformConfigured) return 3;
+    if (!state.isExampleAdded) return 4;
+    return 4;
   }
 
   Widget _buildStepContent(
@@ -128,7 +244,7 @@ class GoogleMapsIntegrationScreen extends StatelessWidget {
       );
     }
 
-    switch (_getActiveStep(state)) {
+    switch (currentStep) {
       case 0:
         return _buildSelectProjectStep(context, state);
       case 1:
@@ -155,6 +271,47 @@ class GoogleMapsIntegrationScreen extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
+            if (!kIsWeb && Platform.isAndroid) ...[
+              Card(
+                color: Colors.blue.shade50,
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    children: [
+                      const Text(
+                        'صلاحيات التخزين',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'يحتاج التطبيق إلى صلاحيات الوصول للتخزين لقراءة وتعديل ملفات مشروعك',
+                        style: TextStyle(fontSize: 14),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 16),
+                      ElevatedButton.icon(
+                        onPressed: () {
+                          context.read<GoogleMapsIntegrationBloc>().add(
+                                RequestPermissions(),
+                              );
+                        },
+                        icon: const Icon(Icons.security),
+                        label: const Text('طلب الصلاحيات'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue,
+                          foregroundColor: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+            ],
             const Text(
               'Select your Flutter project directory',
               style: TextStyle(fontSize: 18),
@@ -173,37 +330,94 @@ class GoogleMapsIntegrationScreen extends StatelessWidget {
                 children: [
                   TextField(
                     controller: directoryController,
-                    readOnly: true,
                     decoration: const InputDecoration(
-                      hintText: 'Selected directory path will appear here',
+                      hintText: 'Enter project directory path',
                       border: OutlineInputBorder(),
                       prefixIcon: Icon(Icons.folder),
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  ElevatedButton.icon(
-                    onPressed: () async {
-                      try {
-                        final String? directoryPath = await getDirectoryPath(
-                          confirmButtonText: 'Select Directory',
-                          initialDirectory: state.projectDirectory,
-                        );
-                        if (directoryPath != null) {
-                          context.read<GoogleMapsIntegrationBloc>().add(
-                                SelectProjectDirectory(directoryPath),
-                              );
-                        }
-                      } catch (e) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('Error selecting directory: $e'),
-                            backgroundColor: Colors.red,
-                          ),
-                        );
+                    onSubmitted: (value) {
+                      if (value.isNotEmpty) {
+                        context.read<GoogleMapsIntegrationBloc>().add(
+                              SelectProjectDirectory(value),
+                            );
                       }
                     },
-                    icon: const Icon(Icons.folder_open),
-                    label: const Text('Choose Directory'),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      if (!kIsWeb && Platform.isAndroid)
+                        ElevatedButton.icon(
+                          onPressed: () {
+                            context.read<GoogleMapsIntegrationBloc>().add(
+                                  RequestPermissions(),
+                                );
+                          },
+                          icon: const Icon(Icons.perm_device_information),
+                          label: const Text('طلب الصلاحيات'),
+                        ),
+                      const SizedBox(width: 16),
+                      ElevatedButton.icon(
+                        onPressed: () async {
+                          try {
+                            if (!kIsWeb && Platform.isAndroid) {
+                              // Request permissions first
+                              context.read<GoogleMapsIntegrationBloc>().add(
+                                    RequestPermissions(),
+                                  );
+                            }
+                            
+                            final String? directoryPath;
+                            if (kIsWeb) {
+                              // On web, just use the text field value
+                              directoryPath = directoryController.text.isNotEmpty
+                                  ? directoryController.text
+                                  : null;
+                            } else {
+                              // On native platforms, use file selector
+                              directoryPath = await getDirectoryPath(
+                                confirmButtonText: 'Select Directory',
+                                initialDirectory: state.projectDirectory,
+                              );
+                            }
+                            
+                            if (directoryPath != null) {
+                              context.read<GoogleMapsIntegrationBloc>().add(
+                                    SelectProjectDirectory(directoryPath),
+                                  );
+                            }
+                          } catch (e) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Error selecting directory: $e'),
+                                backgroundColor: Colors.red,
+                              ),
+                            );
+                          }
+                        },
+                        icon: const Icon(Icons.folder_open),
+                        label: const Text('اختيار المجلد'),
+                      ),
+                      if (directoryController.text.isNotEmpty) ...[
+                        const SizedBox(width: 16),
+                        ElevatedButton.icon(
+                          onPressed: () {
+                            if (directoryController.text.isNotEmpty) {
+                              context.read<GoogleMapsIntegrationBloc>().add(
+                                    SelectProjectDirectory(directoryController.text),
+                                  );
+                            }
+                          },
+                          icon: const Icon(Icons.check),
+                          label: const Text('تأكيد'),
+                        ),
+                      ],
+                      if (state.projectDirectory != null) ...[
+                        const SizedBox(width: 16),
+                        const Icon(Icons.check_circle, color: Colors.green),
+                      ]
+                    ],
                   ),
                 ],
               ),
@@ -231,16 +445,30 @@ class GoogleMapsIntegrationScreen extends StatelessWidget {
           const Text(
             'Add Google Maps Flutter package to your project',
             style: TextStyle(fontSize: 18),
+            textAlign: TextAlign.center,
           ),
           const SizedBox(height: 16),
-          ElevatedButton.icon(
-            onPressed: () {
-              context.read<GoogleMapsIntegrationBloc>().add(
-                    AddGoogleMapsPackage(),
-                  );
-            },
-            icon: const Icon(Icons.add_box),
-            label: const Text('Add Package'),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              ElevatedButton.icon(
+                onPressed: state.isPackageAdded 
+                    ? null 
+                    : () {
+                        context.read<GoogleMapsIntegrationBloc>().add(
+                              AddGoogleMapsPackage(),
+                            );
+                      },
+                icon: const Icon(Icons.add_box),
+                label: const Text('Add Package'),
+              ),
+              if (state.isPackageAdded) ...[
+                const SizedBox(width: 16),
+                const Icon(Icons.check_circle, color: Colors.green),
+                const SizedBox(width: 8),
+                const Text('Package added successfully', style: TextStyle(color: Colors.green)),
+              ]
+            ],
           ),
         ],
       ),
@@ -260,6 +488,7 @@ class GoogleMapsIntegrationScreen extends StatelessWidget {
           const Text(
             'Enter your Google Maps API Key',
             style: TextStyle(fontSize: 18),
+            textAlign: TextAlign.center,
           ),
           const SizedBox(height: 16),
           Container(
@@ -281,16 +510,27 @@ class GoogleMapsIntegrationScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
-          ElevatedButton.icon(
-            onPressed: () {
-              if (apiKeyController.text.isNotEmpty) {
-                context.read<GoogleMapsIntegrationBloc>().add(
-                      SetApiKey(apiKeyController.text),
-                    );
-              }
-            },
-            icon: const Icon(Icons.save),
-            label: const Text('Save API Key'),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              ElevatedButton.icon(
+                onPressed: () {
+                  if (apiKeyController.text.isNotEmpty) {
+                    context.read<GoogleMapsIntegrationBloc>().add(
+                          SetApiKey(apiKeyController.text),
+                        );
+                  }
+                },
+                icon: const Icon(Icons.save),
+                label: const Text('Save API Key'),
+              ),
+              if (state.apiKey != null) ...[
+                const SizedBox(width: 16),
+                const Icon(Icons.check_circle, color: Colors.green),
+                const SizedBox(width: 8),
+                const Text('API key saved', style: TextStyle(color: Colors.green)),
+              ]
+            ],
           ),
         ],
       ),
@@ -308,16 +548,30 @@ class GoogleMapsIntegrationScreen extends StatelessWidget {
           const Text(
             'Configure platform-specific settings',
             style: TextStyle(fontSize: 18),
+            textAlign: TextAlign.center,
           ),
           const SizedBox(height: 16),
-          ElevatedButton.icon(
-            onPressed: () {
-              context.read<GoogleMapsIntegrationBloc>().add(
-                    ConfigurePlatforms(),
-                  );
-            },
-            icon: const Icon(Icons.settings),
-            label: const Text('Configure Platforms'),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              ElevatedButton.icon(
+                onPressed: state.isPlatformConfigured 
+                    ? null 
+                    : () {
+                        context.read<GoogleMapsIntegrationBloc>().add(
+                              ConfigurePlatforms(),
+                            );
+                      },
+                icon: const Icon(Icons.settings),
+                label: const Text('Configure Platforms'),
+              ),
+              if (state.isPlatformConfigured) ...[
+                const SizedBox(width: 16),
+                const Icon(Icons.check_circle, color: Colors.green),
+                const SizedBox(width: 8),
+                const Text('Platforms configured', style: TextStyle(color: Colors.green)),
+              ]
+            ],
           ),
         ],
       ),
@@ -335,16 +589,30 @@ class GoogleMapsIntegrationScreen extends StatelessWidget {
           const Text(
             'Add a simple Google Maps example to your project',
             style: TextStyle(fontSize: 18),
+            textAlign: TextAlign.center,
           ),
           const SizedBox(height: 16),
-          ElevatedButton.icon(
-            onPressed: () {
-              context.read<GoogleMapsIntegrationBloc>().add(
-                    AddMapExample(),
-                  );
-            },
-            icon: const Icon(Icons.map),
-            label: const Text('Add Example'),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              ElevatedButton.icon(
+                onPressed: state.isExampleAdded 
+                    ? null 
+                    : () {
+                        context.read<GoogleMapsIntegrationBloc>().add(
+                              AddMapExample(),
+                            );
+                      },
+                icon: const Icon(Icons.map),
+                label: const Text('Add Example'),
+              ),
+              if (state.isExampleAdded) ...[
+                const SizedBox(width: 16),
+                const Icon(Icons.check_circle, color: Colors.green),
+                const SizedBox(width: 8),
+                const Text('Example added successfully', style: TextStyle(color: Colors.green)),
+              ]
+            ],
           ),
         ],
       ),

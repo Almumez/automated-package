@@ -29,4 +29,6 @@ class SetApiKey extends GoogleMapsIntegrationEvent {
 
 class ConfigurePlatforms extends GoogleMapsIntegrationEvent {}
 
-class AddMapExample extends GoogleMapsIntegrationEvent {} 
+class AddMapExample extends GoogleMapsIntegrationEvent {}
+
+class RequestPermissions extends GoogleMapsIntegrationEvent {} 
