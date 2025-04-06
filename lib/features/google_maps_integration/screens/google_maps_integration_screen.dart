@@ -383,38 +383,164 @@ class _GoogleMapsIntegrationScreenState extends State<GoogleMapsIntegrationScree
     GoogleMapsIntegrationState state,
   ) {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Text(
-            'Add Google Maps Flutter package to your project',
-            style: TextStyle(fontSize: 18),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              ElevatedButton.icon(
-                onPressed: state.isPackageAdded 
-                    ? null 
-                    : () {
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Text(
+              'Add Google Maps Flutter package to your project',
+              style: TextStyle(fontSize: 18),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'We will add the google_maps_flutter package to your pubspec.yaml file',
+              style: TextStyle(fontSize: 14, color: Colors.grey),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            Container(
+              width: 500,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'The following line will be added to your pubspec.yaml:',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.black87,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: const Text(
+                      'google_maps_flutter: ^2.5.3',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontFamily: 'monospace',
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                ElevatedButton.icon(
+                  onPressed: state.isPackageAdded 
+                      ? null 
+                      : () {
+                          // Show a loading indicator before adding
+                          showDialog(
+                            context: context,
+                            barrierDismissible: false,
+                            builder: (context) => const AlertDialog(
+                              content: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  CircularProgressIndicator(),
+                                  SizedBox(height: 16),
+                                  Text('Adding package to pubspec.yaml...'),
+                                ],
+                              ),
+                            ),
+                          );
+                          
+                          // Add the package
+                          context.read<GoogleMapsIntegrationBloc>().add(
+                                AddGoogleMapsPackage(),
+                              );
+                              
+                          // Close the dialog after a delay
+                          Future.delayed(const Duration(seconds: 1), () {
+                            if (Navigator.canPop(context)) {
+                              Navigator.pop(context);
+                            }
+                          });
+                        },
+                  icon: const Icon(Icons.add_box),
+                  label: const Text('Add Package'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: state.isPackageAdded ? Colors.grey : Colors.blue,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  ),
+                ),
+                if (state.isPackageAdded) ...[
+                  const SizedBox(width: 16),
+                  const Icon(Icons.check_circle, color: Colors.green, size: 28),
+                  const SizedBox(width: 8),
+                  const Text(
+                    'Package added successfully', 
+                    style: TextStyle(
+                      color: Colors.green,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ]
+              ],
+            ),
+            if (state.error != null && currentStep == 1) ...[
+              const SizedBox(height: 24),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.red.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.red.shade200),
+                ),
+                child: Column(
+                  children: [
+                    const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.error_outline, color: Colors.red),
+                        SizedBox(width: 8),
+                        Text(
+                          'Error adding package',
+                          style: TextStyle(
+                            color: Colors.red,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      state.error!,
+                      style: const TextStyle(color: Colors.red),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'You can continue by manually adding the package to your pubspec.yaml file and clicking the button below.',
+                      style: TextStyle(fontSize: 12),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 8),
+                    ElevatedButton(
+                      onPressed: () {
                         context.read<GoogleMapsIntegrationBloc>().add(
                               AddGoogleMapsPackage(),
                             );
                       },
-                icon: const Icon(Icons.add_box),
-                label: const Text('Add Package'),
+                      child: const Text('Try Again'),
+                    ),
+                  ],
+                ),
               ),
-              if (state.isPackageAdded) ...[
-                const SizedBox(width: 16),
-                const Icon(Icons.check_circle, color: Colors.green),
-                const SizedBox(width: 8),
-                const Text('Package added successfully', style: TextStyle(color: Colors.green)),
-              ]
             ],
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
