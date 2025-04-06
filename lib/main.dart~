@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'features/google_maps_integration/bloc/google_maps_integration_bloc.dart';
-import 'features/google_maps_integration/presentation/screens/google_maps_integration_screen.dart';
+import 'features/google_maps_integration/screens/google_maps_integration_screen.dart';
 
 void main() {
   runApp(const MyApp());

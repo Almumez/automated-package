@@ -4,9 +4,9 @@ import 'package:easy_stepper/easy_stepper.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'dart:io' show Platform;
-import '../../bloc/google_maps_integration_bloc.dart';
-import '../../bloc/google_maps_integration_event.dart';
-import '../../bloc/google_maps_integration_state.dart';
+import '../bloc/google_maps_integration_bloc.dart';
+import '../bloc/google_maps_integration_event.dart';
+import '../bloc/google_maps_integration_state.dart';
 
 class GoogleMapsIntegrationScreen extends StatefulWidget {
   const GoogleMapsIntegrationScreen({super.key});
